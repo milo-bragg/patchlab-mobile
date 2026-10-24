@@ -1,0 +1,12 @@
+node_modules/
+.expo/
+ios/build/
+ios/Pods/
+ios/DerivedData/
+*.ipa
+*.p8
+*.p12
+*.mobileprovision
+credentials.json
+ios/certs/
+dist/

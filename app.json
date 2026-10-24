@@ -1,0 +1,51 @@
+{
+  "expo": {
+    "name": "PatchLab",
+    "slug": "patchlab",
+    "owner": "milo.bragg.ai",
+    "version": "1.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "dark",
+    "backgroundColor": "#1e1e1e",
+    "scheme": "patchlab",
+    "splash": {
+      "image": "./assets/splash-icon.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#1e1e1e"
+    },
+    "ios": {
+      "supportsTablet": false,
+      "bundleIdentifier": "com.patchlab.app",
+      "buildNumber": "1",
+      "appleTeamId": "28NBCD6AWG",
+      "infoPlist": {
+        "ITSAppUsesNonExemptEncryption": false,
+        "NSCameraUsageDescription": "PatchLab uses your camera so you can photograph your plants and send photos in Messenger.",
+        "NSPhotoLibraryUsageDescription": "PatchLab accesses your photos so you can attach pictures to your grows, seed listings and messages.",
+        "NSPhotoLibraryAddUsageDescription": "PatchLab can save photos to your photo library.",
+        "NSMicrophoneUsageDescription": "PatchLab uses your microphone to record voice messages in Messenger.",
+        "UIBackgroundModes": [
+          "remote-notification"
+        ]
+      }
+    },
+    "plugins": [
+      [
+        "expo-notifications",
+        {
+          "mode": "production"
+        }
+      ],
+      [
+        "expo-build-properties",
+        {
+          "ios": {
+            "deploymentTarget": "16.0"
+          }
+        }
+      ],
+      "expo-splash-screen"
+    ]
+  }
+}
