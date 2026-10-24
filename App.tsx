@@ -13,6 +13,13 @@ const HOME = 'https://patchlab.app'
 const HOSTS = ['patchlab.app', 'www.patchlab.app']
 const APP_VERSION = String(Constants.expoConfig?.version ?? '1.0')
 const BG = '#1e1e1e'
+const LANG = (Intl.DateTimeFormat().resolvedOptions().locale || 'en').slice(0, 2)
+const TXT = ({
+  en: { home: 'Home', grows: 'Grows', chat: 'Messages', menu: 'Menu', offline: 'No connection. Check your internet and try again.', retry: 'Try again' },
+  de: { home: 'Start', grows: 'Anbau', chat: 'Nachrichten', menu: 'Menü', offline: 'Keine Verbindung. Prüfe dein Internet und versuche es erneut.', retry: 'Erneut versuchen' },
+  es: { home: 'Inicio', grows: 'Cultivos', chat: 'Mensajes', menu: 'Menú', offline: 'Sin conexión. Revisa tu internet e inténtalo de nuevo.', retry: 'Reintentar' },
+} as Record<string, Record<string, string>>)[LANG] || {} as Record<string, string>
+const L = { ...({ home: 'Home', grows: 'Grows', chat: 'Messages', menu: 'Menu', offline: 'No connection. Check your internet and try again.', retry: 'Try again' }), ...TXT }
 
 SplashScreen.preventAutoHideAsync().catch(() => undefined)
 // The web page already dings/pops up while the app is open, so no banner/sound while in the foreground.
@@ -25,6 +32,8 @@ function Shell() {
   const [failed, setFailed] = useState(false)
   const [loading, setLoading] = useState(true)
   const [kb, setKb] = useState(0)
+  const [route, setRoute] = useState('/community')
+  const [unread, setUnread] = useState(0)
   const token = useRef<string | null>(null)
   const askedPush = useRef(false)
 
@@ -82,7 +91,8 @@ function Shell() {
   const onMessage = useCallback((e: WebViewMessageEvent) => {
     try {
       const m = JSON.parse(e.nativeEvent.data)
-      if (m.type === 'unread') Notifications.setBadgeCountAsync(Math.max(0, Number(m.n) || 0)).catch(() => undefined)
+      if (m.type === 'unread') { const n = Math.max(0, Number(m.n) || 0); setUnread(n); Notifications.setBadgeCountAsync(n).catch(() => undefined) }
+      else if (m.type === 'route') setRoute(String(m.path || ''))
       else if (m.type === 'loggedin') setupPush()
     } catch { /* ignore */ }
   }, [setupPush])
@@ -99,15 +109,22 @@ function Shell() {
   }, [])
 
   if (!uri) return <View style={styles.fill} />
-  const bottom = kb > 0 ? kb : insets.bottom
+  const bottom = kb > 0 ? kb : 0
+  const goTo = (path: string) => run(`window.dispatchEvent(new CustomEvent('pl-native-nav',{detail:${JSON.stringify(path)}}))`)
+  const tabs: { key: string; icon: string; label: string; path?: string; match: (r: string) => boolean }[] = [
+    { key: 'home', icon: '🏠', label: L.home, path: '/community', match: r => r === '/community' || r.startsWith('/community/') },
+    { key: 'grow', icon: '🌱', label: L.grows, path: '/grow-tracker', match: r => r.startsWith('/grow-tracker') || r.startsWith('/grow-files') || r.startsWith('/archived-grows') },
+    { key: 'chat', icon: '💬', label: L.chat, path: '/messages', match: r => r.startsWith('/messages') },
+    { key: 'menu', icon: '☰', label: L.menu, match: () => false },
+  ]
   return (
     <View style={[styles.fill, { paddingTop: insets.top, paddingBottom: bottom }]}>
       <StatusBar style="light" />
       {failed ? (
         <View style={styles.center}>
           <Text style={styles.title}>PatchLab</Text>
-          <Text style={styles.msg}>No connection. Check your internet and try again.</Text>
-          <Pressable style={styles.btn} onPress={() => { setFailed(false); setLoading(true); web.current?.reload() }}><Text style={styles.btnTxt}>Try again</Text></Pressable>
+          <Text style={styles.msg}>{L.offline}</Text>
+          <Pressable style={styles.btn} onPress={() => { setFailed(false); setLoading(true); web.current?.reload() }}><Text style={styles.btnTxt}>{L.retry}</Text></Pressable>
         </View>
       ) : null}
       <WebView
@@ -136,6 +153,19 @@ function Shell() {
         setSupportMultipleWindows={false}
         decelerationRate={Platform.OS === 'ios' ? 'normal' : undefined}
       />
+      {kb === 0 && !failed ? (
+        <View style={[styles.tabs, { paddingBottom: Math.max(insets.bottom, 6) }]}>
+          {tabs.map(tb => {
+            const on = tb.match(route)
+            return (
+              <Pressable key={tb.key} style={styles.tab} onPress={() => (tb.path ? goTo(tb.path) : run(`window.dispatchEvent(new Event('pl-toggle-nav-menu'))`))}>
+                <View><Text style={[styles.tabIcon, on && styles.tabOn]}>{tb.icon}</Text>{tb.key === 'chat' && unread > 0 ? <View style={styles.badge}><Text style={styles.badgeTxt}>{unread > 99 ? '99+' : unread}</Text></View> : null}</View>
+                <Text style={[styles.tabLbl, on && styles.tabLblOn]}>{tb.label}</Text>
+              </Pressable>
+            )
+          })}
+        </View>
+      ) : null}
       {loading && !failed ? <View style={styles.spin} pointerEvents="none"><ActivityIndicator color="#f58220" /></View> : null}
     </View>
   )
@@ -152,5 +182,13 @@ const styles = StyleSheet.create({
   msg: { color: '#ddd', fontSize: 16, textAlign: 'center' },
   btn: { backgroundColor: '#f58220', paddingHorizontal: 22, paddingVertical: 12, borderRadius: 10 },
   btnTxt: { color: '#1e1e1e', fontWeight: '700', fontSize: 16 },
+  tabs: { flexDirection: 'row', backgroundColor: '#161616', borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: '#333', paddingTop: 6 },
+  tab: { flex: 1, alignItems: 'center', gap: 2, paddingVertical: 2 },
+  tabIcon: { fontSize: 22, opacity: 0.55 },
+  tabOn: { opacity: 1 },
+  tabLbl: { fontSize: 10, color: '#888', fontWeight: '600' },
+  tabLblOn: { color: '#f58220' },
+  badge: { position: 'absolute', top: -4, right: -10, backgroundColor: '#ef4444', borderRadius: 9, minWidth: 18, height: 18, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 4 },
+  badgeTxt: { color: '#fff', fontSize: 10, fontWeight: '800' },
   spin: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, alignItems: 'center', justifyContent: 'center' },
 })
