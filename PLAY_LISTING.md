@@ -1,5 +1,5 @@
 # PatchLab — Google Play listing + forms (package com.patchlab.app)
-AAB: ~/pl_android_build/patchlab-1.aab (versionCode 1, signed with signing/patchlab-upload.keystore; backup ~/patchlab-android-keystore-backup/)
+AAB: ~/pl_android_build/patchlab-1.aab (versionCode 2 (latest), signed with signing/patchlab-upload.keystore; backup ~/patchlab-android-keystore-backup/)
 Assets: ~/pl_android_build/assets/ (play-icon-512.png, play-feature-1024x500.png, phone-1..5.png 1080x1920)
 Build again: `nohup ./build_android.sh > ~/pl_android_build.log 2>&1 &` (bump android.versionCode in app.json first)
 
