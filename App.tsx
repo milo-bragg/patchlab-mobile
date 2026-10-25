@@ -131,7 +131,7 @@ function Shell() {
     { key: 'home', icon: '🏠', label: L.home, path: '/community', match: r => r === '/community' || r.startsWith('/community/') },
     { key: 'grow', icon: '🌱', label: L.grows, path: '/grow-tracker', match: r => r.startsWith('/grow-tracker') || r.startsWith('/grow-files') || r.startsWith('/archived-grows') },
     { key: 'chat', icon: '💬', label: L.chat, path: '/messages', match: r => r.startsWith('/messages') },
-    { key: 'menu', icon: '☰', label: L.menu, match: () => false },
+    { key: 'menu', icon: '🧭', label: L.menu, match: () => false },
   ]
   return (
     <View style={[styles.fill, { paddingTop: insets.top, paddingBottom: bottom }]}>
