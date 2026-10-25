@@ -10,3 +10,13 @@ ios/DerivedData/
 credentials.json
 ios/certs/
 dist/
+signing/
+*.keystore
+*.jks
+*.aab
+*.apk
+google-services.json
+android/build/
+android/app/build/
+android/.gradle/
+android/

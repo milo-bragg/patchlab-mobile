@@ -1,7 +1,7 @@
-// PatchLab iPhone app: native shell around https://patchlab.app (react-native-webview) + native push, icon badge, deep links.
+// PatchLab iPhone + Android app: native shell around https://patchlab.app (react-native-webview) + native push, icon badge, deep links.
 // Web <-> app bridge: see patchlab/src/lib/native-app.ts (window.__PL_NATIVE, 'pl-native-token', postMessage {type:'loggedin'|'unread'}).
 import React, { useCallback, useEffect, useRef, useState } from 'react'
-import { ActivityIndicator, AppState, Keyboard, Linking, Platform, Pressable, StyleSheet, Text, View } from 'react-native'
+import { ActivityIndicator, AppState, BackHandler, Keyboard, Linking, Platform, Pressable, StyleSheet, Text, View } from 'react-native'
 import { StatusBar } from 'expo-status-bar'
 import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { WebView, type WebViewMessageEvent } from 'react-native-webview'
@@ -23,6 +23,10 @@ const L = { ...({ home: 'Home', grows: 'Grows', chat: 'Messages', menu: 'Menu', 
 
 SplashScreen.preventAutoHideAsync().catch(() => undefined)
 // The web page already dings/pops up while the app is open, so no banner/sound while in the foreground.
+// Android: pushes arrive on this channel (must exist before the first push; FCM payload uses channel_id 'messages').
+if (Platform.OS === 'android') {
+  Notifications.setNotificationChannelAsync('messages', { name: 'Messages', importance: Notifications.AndroidImportance.MAX, vibrationPattern: [0, 250, 250, 250], lightColor: '#f58220', lockscreenVisibility: Notifications.AndroidNotificationVisibility.PRIVATE }).catch(() => undefined)
+}
 Notifications.setNotificationHandler({ handleNotification: async () => ({ shouldShowBanner: false, shouldShowList: false, shouldPlaySound: false, shouldSetBadge: false }) })
 
 function Shell() {
@@ -34,13 +38,14 @@ function Shell() {
   const [kb, setKb] = useState(0)
   const [route, setRoute] = useState('/community')
   const [unread, setUnread] = useState(0)
+  const canBack = useRef(false)
   const token = useRef<string | null>(null)
   const askedPush = useRef(false)
 
   const run = useCallback((js: string) => web.current?.injectJavaScript(js + ';true;'), [])
   const injectToken = useCallback(() => {
     if (!token.current) return
-    run(`window.__PL_NATIVE={token:${JSON.stringify(token.current)},env:'production',version:${JSON.stringify(APP_VERSION)}};window.dispatchEvent(new Event('pl-native-token'))`)
+    run(`window.__PL_NATIVE={token:${JSON.stringify(token.current)},env:'production',version:${JSON.stringify(APP_VERSION)},platform:${JSON.stringify(Platform.OS)}};window.dispatchEvent(new Event('pl-native-token'))`)
   }, [run])
   const openUrl = useCallback((url: string) => { const u = url.startsWith('/') ? url : '/messages'; run(`window.location.assign(${JSON.stringify(u)})`) }, [run])
 
@@ -53,7 +58,7 @@ function Shell() {
       if (status !== 'granted') status = (await Notifications.requestPermissionsAsync({ ios: { allowAlert: true, allowBadge: true, allowSound: true } })).status
       if (status !== 'granted') return
       const t = await Notifications.getDevicePushTokenAsync()
-      token.current = String(t.data).toLowerCase()
+      token.current = Platform.OS === 'ios' ? String(t.data).toLowerCase() : String(t.data)   // APNs hex vs case-sensitive FCM token
       injectToken()
     } catch { askedPush.current = false }
   }, [injectToken])
@@ -74,9 +79,20 @@ function Shell() {
 
   // On-screen keyboard: shrink the web view so the chat composer stays visible (WKWebView does not resize by itself).
   useEffect(() => {
-    const a = Keyboard.addListener('keyboardWillShow', e => setKb(e.endCoordinates.height))
-    const b = Keyboard.addListener('keyboardWillHide', () => setKb(0))
+    const ios = Platform.OS === 'ios'
+    const a = Keyboard.addListener(ios ? 'keyboardWillShow' : 'keyboardDidShow', e => setKb(e.endCoordinates.height))
+    const b = Keyboard.addListener(ios ? 'keyboardWillHide' : 'keyboardDidHide', () => setKb(0))
     return () => { a.remove(); b.remove() }
+  }, [])
+
+  // Android back button: go back inside the web app first; only leave the app from the first page.
+  useEffect(() => {
+    if (Platform.OS !== 'android') return
+    const sub = BackHandler.addEventListener('hardwareBackPress', () => {
+      if (canBack.current) { web.current?.goBack(); return true }
+      return false
+    })
+    return () => sub.remove()
   }, [])
 
   // Leaving the app: tell PatchLab right away (so push notifications start), coming back: wake up the page.
@@ -132,7 +148,8 @@ function Shell() {
         source={{ uri }}
         style={[styles.fill, failed && { display: 'none' }]}
         applicationNameForUserAgent={`PatchLabApp/${APP_VERSION}`}
-        injectedJavaScriptBeforeContentLoaded={token.current ? `window.__PL_NATIVE={token:${JSON.stringify(token.current)},env:'production',version:${JSON.stringify(APP_VERSION)}};true;` : 'true;'}
+        injectedJavaScriptBeforeContentLoaded={token.current ? `window.__PL_NATIVE={token:${JSON.stringify(token.current)},env:'production',version:${JSON.stringify(APP_VERSION)},platform:${JSON.stringify(Platform.OS)}};true;` : 'true;'}
+        onNavigationStateChange={n => { canBack.current = n.canGoBack }}
         onMessage={onMessage}
         onShouldStartLoadWithRequest={allow}
         onLoadEnd={() => { setLoading(false); SplashScreen.hideAsync().catch(() => undefined) }}
@@ -151,6 +168,10 @@ function Shell() {
         automaticallyAdjustContentInsets={false}
         bounces
         setSupportMultipleWindows={false}
+        thirdPartyCookiesEnabled
+        allowFileAccess={false}
+        mixedContentMode="never"
+        overScrollMode="never"
         decelerationRate={Platform.OS === 'ios' ? 'normal' : undefined}
       />
       {kb === 0 && !failed ? (
